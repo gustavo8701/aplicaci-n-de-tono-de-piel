@@ -11,6 +11,15 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.1.1(react-hook-form@7.58.1(react@19.1.0))
+      '@mediapipe/drawing_utils':
+        specifier: ^0.3.1675466124
+        version: 0.3.1675466124
+      '@mediapipe/face_mesh':
+        specifier: ^0.4.1633559619
+        version: 0.4.1633559619
+      '@mediapipe/tasks-vision':
+        specifier: 0.10.22-rc.20250304
+        version: 0.10.22-rc.20250304
       '@radix-ui/react-accordion':
         specifier: ^1.2.10
         version: 1.2.11(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -529,6 +538,15 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.25':
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
+
+  '@mediapipe/drawing_utils@0.3.1675466124':
+    resolution: {integrity: sha512-/IWIB/iYRMtiUKe3k7yGqvwseWHCOqzVpRDfMgZ6gv9z7EEimg6iZbRluoPbcNKHbYSxN5yOvYTzUYb8KVf22Q==}
+
+  '@mediapipe/face_mesh@0.4.1633559619':
+    resolution: {integrity: sha512-Vc8cdjxS5+O2gnjWH9KncYpUCVXT0h714KlWAsyqJvJbIgUJBqpppbIx8yWcAzBDxm/5cYSuBI5p5ySIPxzcEg==}
+
+  '@mediapipe/tasks-vision@0.10.22-rc.20250304':
+    resolution: {integrity: sha512-dElxVXMFGthshfIj+qAVm8KE2jmNo2p8oXFib8WzEjb7GNaX/ClWBc8UJfoSZwjEMVrdHJ4YUfa7P3ifl6MIWw==}
 
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
@@ -2567,6 +2585,12 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
+
+  '@mediapipe/drawing_utils@0.3.1675466124': {}
+
+  '@mediapipe/face_mesh@0.4.1633559619': {}
+
+  '@mediapipe/tasks-vision@0.10.22-rc.20250304': {}
 
   '@radix-ui/number@1.1.1': {}
 

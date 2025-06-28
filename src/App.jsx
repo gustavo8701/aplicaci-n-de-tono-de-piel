@@ -1,20 +1,9 @@
-import { 
-  useState, 
-  useRef, 
-  useEffect,
-  // Los siguientes son los que estaban en la línea 23
-  // y que probablemente también vienen de 'react' o de otro paquete.
-  // Si causan error, los comentaremos, pero por ahora los dejamos.
-  // Sparkles,  // Asumo que viene de 'lucide-react'
-  // Palette,   // Asumo que viene de 'lucide-react'
-  // Heart      // Asumo que viene de 'lucide-react'
-} from 'react';
-
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Camera,
-  Sparkles, // Duplicado, pero lo mantenemos en un solo lugar
-  Palette,  // Duplicado, pero lo mantenemos en un solo lugar
-  Heart,    // Duplicado, pero lo mantenemos en un solo lugar
+  Sparkles,
+  Palette,
+  Heart,
   ArrowRight,
   ArrowLeft,
   CheckCircle,
@@ -27,10 +16,8 @@ import {
   RefreshCw,
   Play
 } from 'lucide-react';
-
 import './App.css';
 
-// El resto del componente App
 function App() {
   const [currentScreen, setCurrentScreen] = useState('welcome');
   const [capturedImage, setCapturedImage] = useState(null);
@@ -51,15 +38,13 @@ function App() {
   useEffect(() => {
     let interval;
     if (isSimulatingCamera) {
-      // Simular detección de rostro y calidad de iluminación
       interval = setInterval(() => {
-        setFaceDetected(Math.random() > 0.3); // 70% de probabilidad
+        setFaceDetected(Math.random() > 0.3);
         const qualities = ['good', 'dark', 'bright'];
         setLightingQuality(qualities[Math.floor(Math.random() * 3)]);
       }, 1500);
     }
     
-    // Limpiar el intervalo cuando se desmonte el componente o cambie la pantalla
     return () => {
       if (interval) {
         clearInterval(interval);

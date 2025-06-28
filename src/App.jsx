@@ -1,86 +1,103 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  Camera,
-  Sparkles,
-  Palette,
-  Heart,
-  ArrowRight,
-  ArrowLeft,
-  CheckCircle,
-  RotateCcw,
-  Zap,
-  Eye,
-  Shield,
-  Smartphone,
-  AlertCircle,
-  RefreshCw,
-  Play
-} from 'lucide-react';
-import './App.css';
+import { FaceMesh, FilesetResolver } from "@mediapipe/tasks-vision";
+import './App.css'; // Asegúrate de tener tus estilos básicos
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('welcome');
-  const [capturedImage, setCapturedImage] = useState(null); // Para guardar la foto capturada
+  const [faceMesh, setFaceMesh] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [isModelLoading, setIsModelLoading] = useState(true);
 
   const videoRef = useRef(null);
-  const canvasRef = useRef(null); // Nuestro canvas para dibujar la foto
+  const canvasRef = useRef(null);
+  const lastVideoTimeRef = useRef(-1);
 
-  // Función que se llama al hacer clic en "Comenzar"
-  const handleStartClick = () => {
+  // --- PASO 2.1: Cargar el modelo de MediaPipe al iniciar la app ---
+  useEffect(() => {
+    const createFaceMesh = async () => {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+        );
+        const newFaceMesh = await FaceMesh.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+            delegate: "GPU",
+          },
+          runningMode: "VIDEO",
+          numFaces: 1,
+        });
+        setFaceMesh(newFaceMesh);
+        setIsModelLoading(false);
+        console.log("Modelo de Face Mesh cargado con éxito.");
+      } catch(error) {
+        console.error("Error al cargar el modelo de Face Mesh:", error);
+      }
+    };
+    createFaceMesh();
+  }, []);
+
+  // --- PASO 2.2: Iniciar la cámara y el bucle de predicción ---
+  const startCamera = async () => {
     setCurrentScreen('camera');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.addEventListener("loadeddata", predictWebcam);
+      }
+    } catch (err) {
+      console.error("Error al acceder a la cámara:", err);
+    }
   };
 
-  // Efecto para manejar el encendido y apagado de la cámara
-  useEffect(() => {
-    let stream;
-    let videoElement = videoRef.current;
-
-    const setupCamera = async () => {
-      // Solo activamos la cámara si estamos en la pantalla correcta
-      if (currentScreen === 'camera' && videoElement) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 1280, height: 720, facingMode: 'user' }
-          });
-          videoElement.srcObject = stream;
-        } catch (err) {
-          console.error("Error al acceder a la cámara:", err);
-          setCurrentScreen('error');
-        }
-      }
-    };
-
-    setupCamera();
-
-    // Función de limpieza para apagar la cámara
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [currentScreen]); // Se ejecuta cuando currentScreen cambia
-
-  // --- ¡NUEVA FUNCIÓN PARA EL BOTÓN! ---
-  const handleCapturePhoto = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (video && canvas) {
-      // Ajustamos el tamaño del canvas al del video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      // Dibujamos el fotograma actual del video en el canvas
-      const context = canvas.getContext('2d');
-      // Lo dibujamos invertido (como un espejo) para que coincida con la vista previa
-      context.translate(canvas.width, 0);
-      context.scale(-1, 1);
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Obtenemos la imagen del canvas como una URL de datos (formato PNG)
-      const photoURL = canvas.toDataURL('image/png');
-      setCapturedImage(photoURL); // Guardamos la foto en el estado
-      setCurrentScreen('analysis'); // Cambiamos a una nueva pantalla para mostrar la foto
+  // --- PASO 3: El "loop" de análisis en cada fotograma ---
+  const predictWebcam = async () => {
+    if (!faceMesh || !videoRef.current || videoRef.current.currentTime === lastVideoTimeRef.current) {
+      requestAnimationFrame(predictWebcam);
+      return;
     }
+
+    lastVideoTimeRef.current = videoRef.current.currentTime;
+    const results = faceMesh.detectForVideo(videoRef.current, Date.now());
+
+    if (results.faceLandmarks.length > 0) {
+      const landmarks = results.faceLandmarks[0];
+      // --- PASO 4 y 5: Dibujar, extraer y calcular el color ---
+      const skinColor = getAverageSkinColor(landmarks, videoRef.current);
+      setAnalysisResult(skinColor); // Guardamos el resultado
+    }
+    
+    requestAnimationFrame(predictWebcam);
+  };
+  
+  // --- PASO 5.1: Función para calcular el color promedio ---
+  const getAverageSkinColor = (landmarks, video) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Índices de puntos de la malla facial en la zona de las mejillas y frente
+    const skinIndices = [109, 69, 104, 67, 10, 338, 297, 333, 299, 336]; 
+    let r = 0, g = 0, b = 0;
+    
+    for (const index of skinIndices) {
+      const point = landmarks[index];
+      const x = Math.floor(point.x * canvas.width);
+      const y = Math.floor(point.y * canvas.height);
+      const [pixelR, pixelG, pixelB] = ctx.getImageData(x, y, 1, 1).data;
+      r += pixelR;
+      g += pixelG;
+      b += pixelB;
+    }
+    
+    const count = skinIndices.length;
+    return {
+      r: Math.round(r / count),
+      g: Math.round(g / count),
+      b: Math.round(b / count),
+    };
   };
 
   return (
@@ -92,197 +109,32 @@ function App() {
         {currentScreen === 'welcome' && (
           <div className="welcome-screen">
             <h2>¡Bienvenida!</h2>
-            <p>Prepárate para encontrar tu tono de piel perfecto.</p>
-            <button onClick={handleStartClick} className="start-button">
-              <Play style={{ marginRight: '8px' }} />
-              Comenzar
-            </button>
+            {isModelLoading ? (
+              <p>Cargando modelo de IA...</p>
+            ) : (
+              <button onClick={startCamera} className="start-button">Comenzar</button>
+            )}
           </div>
         )}
 
         {currentScreen === 'camera' && (
           <div className="camera-screen">
-            <div className="camera-view">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                style={{ width: '100%', height: 'auto', transform: 'scaleX(-1)' }}
-              ></video>
-              {/* Canvas oculto que usaremos para la captura */}
-              <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-            </div>
-            <div className="status-indicators">
-              <p>Apunta la cámara a tu rostro.</p>
-            </div>
-            {/* El botón ahora llama a nuestra nueva función */}
-            <button onClick={handleCapturePhoto} className="capture-button">Capturar Foto</button>
+            <video ref={videoRef} autoPlay playsInline muted style={{ transform: 'scaleX(-1)' }}></video>
+            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+            
+            {/* --- PASO 6: Mostrar el resultado --- */}
+            {analysisResult && (
+              <div className="result-display">
+                <p>Tono de Piel Detectado:</p>
+                <div 
+                  className="color-box"
+                  style={{ backgroundColor: `rgb(${analysisResult.r}, ${analysisResult.g}, ${analysisResult.b})` }}
+                ></div>
+                <span>{`RGB(${analysisResult.r}, ${analysisResult.g}, ${analysisResult.b})`}</span>
+              </div>
+            )}
           </div>
         )}
-
-        {/* --- ¡NUEVA PANTALLA PARA MOSTRAR LA FOTO! --- */}
-        {currentScreen === 'analysis' && (
-          <div className="analysis-screen">
-            <h2>Foto Capturada</h2>
-            <p>Ahora analizaremos esta imagen.</p>
-            <img src={capturedImage} alt="Foto capturada" style={{ maxWidth: '100%' }} />
-            {/* Aquí irían los botones para "Analizar" o "Volver a tomar" */}
-          </div>
-        )}
-
-        {currentScreen === 'error' && (
-          <div className="error-screen">
-            <h2>¡Oh no!</h2>
-            <p>No pudimos acceder a la cámara. Por favor, asegúrate de haberle dado permiso en el navegador.</p>
-          </div>
-        )}
-
-      </main>
-    </div>
-  );
-}
-
-export default App;import React, { useState, useRef, useEffect } from 'react';
-import {
-  Camera,
-  Sparkles,
-  Palette,
-  Heart,
-  ArrowRight,
-  ArrowLeft,
-  CheckCircle,
-  RotateCcw,
-  Zap,
-  Eye,
-  Shield,
-  Smartphone,
-  AlertCircle,
-  RefreshCw,
-  Play
-} from 'lucide-react';
-import './App.css';
-
-function App() {
-  const [currentScreen, setCurrentScreen] = useState('welcome');
-  const [capturedImage, setCapturedImage] = useState(null); // Para guardar la foto capturada
-
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null); // Nuestro canvas para dibujar la foto
-
-  // Función que se llama al hacer clic en "Comenzar"
-  const handleStartClick = () => {
-    setCurrentScreen('camera');
-  };
-
-  // Efecto para manejar el encendido y apagado de la cámara
-  useEffect(() => {
-    let stream;
-    let videoElement = videoRef.current;
-
-    const setupCamera = async () => {
-      // Solo activamos la cámara si estamos en la pantalla correcta
-      if (currentScreen === 'camera' && videoElement) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 1280, height: 720, facingMode: 'user' }
-          });
-          videoElement.srcObject = stream;
-        } catch (err) {
-          console.error("Error al acceder a la cámara:", err);
-          setCurrentScreen('error');
-        }
-      }
-    };
-
-    setupCamera();
-
-    // Función de limpieza para apagar la cámara
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [currentScreen]); // Se ejecuta cuando currentScreen cambia
-
-  // --- ¡NUEVA FUNCIÓN PARA EL BOTÓN! ---
-  const handleCapturePhoto = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (video && canvas) {
-      // Ajustamos el tamaño del canvas al del video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      // Dibujamos el fotograma actual del video en el canvas
-      const context = canvas.getContext('2d');
-      // Lo dibujamos invertido (como un espejo) para que coincida con la vista previa
-      context.translate(canvas.width, 0);
-      context.scale(-1, 1);
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Obtenemos la imagen del canvas como una URL de datos (formato PNG)
-      const photoURL = canvas.toDataURL('image/png');
-      setCapturedImage(photoURL); // Guardamos la foto en el estado
-      setCurrentScreen('analysis'); // Cambiamos a una nueva pantalla para mostrar la foto
-    }
-  };
-
-  return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>Analizador de Tono de Piel</h1>
-      </header>
-      <main className="app-main">
-        {currentScreen === 'welcome' && (
-          <div className="welcome-screen">
-            <h2>¡Bienvenida!</h2>
-            <p>Prepárate para encontrar tu tono de piel perfecto.</p>
-            <button onClick={handleStartClick} className="start-button">
-              <Play style={{ marginRight: '8px' }} />
-              Comenzar
-            </button>
-          </div>
-        )}
-
-        {currentScreen === 'camera' && (
-          <div className="camera-screen">
-            <div className="camera-view">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                style={{ width: '100%', height: 'auto', transform: 'scaleX(-1)' }}
-              ></video>
-              {/* Canvas oculto que usaremos para la captura */}
-              <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-            </div>
-            <div className="status-indicators">
-              <p>Apunta la cámara a tu rostro.</p>
-            </div>
-            {/* El botón ahora llama a nuestra nueva función */}
-            <button onClick={handleCapturePhoto} className="capture-button">Capturar Foto</button>
-          </div>
-        )}
-
-        {/* --- ¡NUEVA PANTALLA PARA MOSTRAR LA FOTO! --- */}
-        {currentScreen === 'analysis' && (
-          <div className="analysis-screen">
-            <h2>Foto Capturada</h2>
-            <p>Ahora analizaremos esta imagen.</p>
-            <img src={capturedImage} alt="Foto capturada" style={{ maxWidth: '100%' }} />
-            {/* Aquí irían los botones para "Analizar" o "Volver a tomar" */}
-          </div>
-        )}
-
-        {currentScreen === 'error' && (
-          <div className="error-screen">
-            <h2>¡Oh no!</h2>
-            <p>No pudimos acceder a la cámara. Por favor, asegúrate de haberle dado permiso en el navegador.</p>
-          </div>
-        )}
-
       </main>
     </div>
   );

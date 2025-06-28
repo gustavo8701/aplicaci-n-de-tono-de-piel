@@ -20,37 +20,34 @@ import './App.css';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('welcome');
-  const [capturedImage, setCapturedImage] = useState(null);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [faceDetected, setFaceDetected] = useState(false);
-  const [lightingQuality, setLightingQuality] = useState('good');
-  const [isSimulatingCamera, setIsSimulatingCamera] = useState(false);
+  // const [capturedImage, setCapturedImage] = useState(null); // Lo comentamos por ahora
+  // const [analysisResult, setAnalysisResult] = useState(null); // Lo comentamos por ahora
+  // const [isAnalyzing, setIsAnalyzing] = useState(false); // Lo comentamos por ahora
 
+  const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Función para simular la cámara con una imagen generada
-  const simulateCamera = () => {
-    setIsSimulatingCamera(true);
+  const startCamera = async () => {
     setCurrentScreen('camera');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: 'user' }
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("¡Error al acceder a la cámara!", err);
+      setCurrentScreen('error'); 
+    }
   };
 
-  useEffect(() => {
-    let interval;
-    if (isSimulatingCamera) {
-      interval = setInterval(() => {
-        setFaceDetected(Math.random() > 0.3);
-        const qualities = ['good', 'dark', 'bright'];
-        setLightingQuality(qualities[Math.floor(Math.random() * 3)]);
-      }, 1500);
-    }
-    
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isSimulatingCamera]);
+  // Aquí iría la función para capturar la foto
+  const capturePhoto = () => {
+    console.log("¡Función para capturar foto pendiente!");
+    // Lógica futura: dibujar el video en el canvas y obtener la imagen.
+  };
 
   return (
     <div className="app-container">
@@ -62,7 +59,7 @@ function App() {
           <div className="welcome-screen">
             <h2>¡Bienvenida!</h2>
             <p>Prepárate para encontrar tu tono de piel perfecto.</p>
-            <button onClick={simulateCamera} className="start-button">
+            <button onClick={startCamera} className="start-button">
               <Play style={{ marginRight: '8px' }} />
               Comenzar
             </button>
@@ -72,16 +69,28 @@ function App() {
         {currentScreen === 'camera' && (
           <div className="camera-screen">
             <div className="camera-view">
-              <p>Simulación de Cámara Activada</p>
-              <Camera size={48} />
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: '100%', height: 'auto', transform: 'scaleX(-1)' }}
+              ></video>
             </div>
             <div className="status-indicators">
-              <p>Detección de Rostro: {faceDetected ? <CheckCircle color="green" /> : <AlertCircle color="red" />}</p>
-              <p>Calidad de Iluminación: {lightingQuality}</p>
+              <p>Apunta la cámara a tu rostro.</p>
             </div>
-            <button className="capture-button">Capturar Foto</button>
+            <button onClick={capturePhoto} className="capture-button">Capturar Foto</button>
           </div>
         )}
+
+        {currentScreen === 'error' && (
+          <div className="error-screen">
+            <h2>¡Oh no!</h2>
+            <p>No pudimos acceder a la cámara. Por favor, asegúrate de haberle dado permiso en el navegador.</p>
+          </div>
+        )}
+
       </main>
     </div>
   );
